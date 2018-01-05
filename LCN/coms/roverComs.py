@@ -12,12 +12,12 @@ from USBUtils import *
 def getSubNodes():
 #--------------------------------------------------------------------------------------------
 # Returns a dictionary of connected nodes and their device mount points.
-	con_nodes = []
+	con_nodes = {}
 	con_devs = getUSBDevices()
 
-	for dev in con_devs:
-		if dev['dev_man'].lower() == "teensyduino":
-			con_nodes.append(dev)
+	for mnt,info in con_devs.iteritems():
+		if info[2].lower() == "teensyduino":
+			con_nodes[mnt] = info
 
 	return con_nodes
 #--------------------------------------------------------------------------------------------
@@ -31,21 +31,25 @@ def initComs(nodes):
 		print "ERROR: No nodes in list!"
 		return
 
-	for x,node in enumerate(nodes):
-		mnt_path = "/".join(["/dev", node['dev_mnt']])
+	for mnt,info in nodes.iteritems():
+		mnt_path = "/".join(["/dev", mnt])
 		print "Connecting to node at", mnt_path
 		serial_port = serial.Serial(port=mnt_path, baudrate=9600, timeout=5)
-		nodes[x]['port'] = serial_port
-		return nodes
+		info.append(serial_port)
+		nodes[mnt] = info
+
+	return nodes
 #--------------------------------------------------------------------------------------------
 
 #--------------------------------------------------------------------------------------------
 def sendMsg(node, msg):
 #--------------------------------------------------------------------------------------------
 # Sends a message to node.
+	node_info = node.values()[0]
 	sendMsg.msgCounter += 1
 	packet = "".join(['<', str(sendMsg.msgCounter), ':', msg, '>'])
-	node['port'].write(packet)
+	node_info[3].write(packet)
+	node_info[3].flush()
 	return sendMsg.msgCounter
 sendMsg.msgCounter = 0;
 #--------------------------------------------------------------------------------------------
@@ -54,12 +58,15 @@ sendMsg.msgCounter = 0;
 def getMsg(node):
 #--------------------------------------------------------------------------------------------
 # Checks and gets message from node.
-	packet = [node['port'].read()]
+	node_info = node.values()[0]
+	packet = [node_info[3].read()]
+
 	if packet[0] != '<':
 		print "ERROR: Packets out of sync!"
-
+		print "".join(["	Recieved '", packet[0], "' as starting character"])
+		return 0,""
 	while 1:
-		packet.append(node['port'].read())
+		packet.append(node_info[3].read())
 		if packet[-1] == '>':
 			break
 
